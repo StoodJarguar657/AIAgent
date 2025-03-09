@@ -1,43 +1,23 @@
 #include "AIAgent.hpp"
 #include <any>
 
-std::any convertToType(const std::string& value, const std::string& type) {
-	static const std::unordered_map<std::string, std::function<std::any(const std::string&)>> typeConverters = {
-		{
-			"std::string", [](const std::string& val) -> std::any { 
-				return val; 
-			}
-		},
-		{
-			"int", [](const std::string& val) -> std::any {
-				try { return std::stoi(val); }
-				catch (...) { return std::any(); }
-			}
-		},
-		{
-			"float", [](const std::string& val) -> std::any {
-				try { return std::stof(val); }
-				catch (...) { return std::any(); }
-			}
-		},
-		{
-			"double", [](const std::string& val) -> std::any {
-				try { return std::stod(val); }
-				catch (...) { return std::any(); }
-			}
-		},
-		{
-			"bool", [](const std::string& val) -> std::any {
-				return (val == "true" || val == "1") ? true : false;
-			}
-		}
+std::any convertToType(const nlohmann::json& value) {
+
+	const nlohmann::json::value_t type = value.type();
+	
+	std::vector<std::function<std::any(const nlohmann::json&)>> typeConverters = {
+		[](const nlohmann::json& obj) -> std::any { return std::any(); /* null*/  },
+		[](const nlohmann::json& obj) -> std::any { return std::any(); /* object */ },
+		[](const nlohmann::json& obj) -> std::any { return std::any(); /* array */ },
+		[](const nlohmann::json& obj) -> std::any { return obj.get<std::string>(); /* string */ },
+		[](const nlohmann::json& obj) -> std::any { return obj.get<bool>(); /* bool */ },
+		[](const nlohmann::json& obj) -> std::any { return obj.get<int>(); /* integer */ },
+		[](const nlohmann::json& obj) -> std::any { return obj.get<int>(); /* unsigned integer */ },
+		[](const nlohmann::json& obj) -> std::any { return obj.get<float>(); /* float */ },
+		[](const nlohmann::json& obj) -> std::any { return obj.get<int>(); /* binary */ },
+		[](const nlohmann::json& obj) -> std::any { return std::any(); /* discarded */ },
 	};
-
-	auto it = typeConverters.find(type);
-	if (it != typeConverters.end())
-		return it->second(value);
-
-	return std::any();
+	return typeConverters.at(static_cast<int>(type))(value);
 }
 
 AIAgent::funcArg::funcArg(const std::string& inName, const std::string& inType, const std::string& inDesc, bool inRequired) :
@@ -235,8 +215,8 @@ std::string AIAgent::internalLLMQuery() {
 		// Combine the value with the value name in order
 		AIFuncArg argList;
 		for (const auto& arg : foundFunc->second->fn.args) {
-			const std::string& argValStr = jsonArgs[arg.name].get<std::string>();
-			argList._setArg(arg.name, convertToType(argValStr, arg.type));
+			const auto& argVal = jsonArgs[arg.name];
+			argList._setArg(arg.name, convertToType(argVal));
 		}
 
 		// Call the function
